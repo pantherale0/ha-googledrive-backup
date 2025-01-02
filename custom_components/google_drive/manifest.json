@@ -1,0 +1,18 @@
+{
+  "domain": "google_drive",
+  "name": "Google Drive",
+  "codeowners": [
+    "@ludeeus"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "application_credentials"
+  ],
+  "documentation": "https://github.com/pantherale0/ha-googledrive-backup",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/pantherale0/ha-googledrive-backup/issues",
+  "requirements": [
+    "google-api-python-client"
+  ],
+  "version": "0.0.0"
+}

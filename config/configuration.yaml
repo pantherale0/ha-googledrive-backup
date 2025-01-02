@@ -9,4 +9,10 @@ homeassistant:
 logger:
   default: info
   logs:
-    custom_components.integration_blueprint: debug
+    custom_components.google_drive: debug
+
+
+# Enable VSCode debugging
+debugpy:
+  start: true
+  wait: true
