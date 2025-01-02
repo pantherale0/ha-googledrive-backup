@@ -59,7 +59,7 @@ NOTE: You must copy and save your Client ID and Client Secret in a safe and secu
 
 [![Open your Home Assistant instance and Back up your Home Assistant installation.](https://my.home-assistant.io/badges/backup.svg)](https://my.home-assistant.io/redirect/backup/)
 
-1. Locate the backup you wish to restore, and restore following the prompts on screen.
+2. Locate the backup you wish to restore, and restore following the prompts on screen.
 
 ## FAQs
 
