@@ -22,7 +22,7 @@ NOTE: You must copy and save your Client ID and Client Secret in a safe and secu
 
 ## Installation
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pantherale0&repository=ha-googledrive-backup)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=pantherale0&repository=ha-googledrive-backup&category=integration)
 
 1. Add repository URL into HACS and install "Google Drive"
 1. Restart Home Assistant
