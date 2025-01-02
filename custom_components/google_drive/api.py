@@ -3,6 +3,7 @@
 from functools import partial
 
 from aiohttp.client_exceptions import ClientError, ClientResponseError
+from cachetools import Cache
 from google.auth.exceptions import RefreshError
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import Resource, build
@@ -15,6 +16,18 @@ from homeassistant.exceptions import (
     HomeAssistantError,
 )
 from homeassistant.helpers import config_entry_oauth2_flow
+
+
+# fixes [googleapiclient.discovery_cache] file_cache is only supported with oauth2client<4.0.0  # noqa: E501
+# https://github.com/googleapis/google-api-python-client/issues/325#issuecomment-274349841
+class MemoryCache(Cache):
+    _CACHE = {}
+
+    def get(self, url):
+        return MemoryCache._CACHE.get(url)
+
+    def set(self, url, content):
+        MemoryCache._CACHE[url] = content
 
 
 class AsyncConfigEntryAuth:
@@ -61,5 +74,11 @@ class AsyncConfigEntryAuth:
         """Get current resource."""
         credentials = Credentials(await self.check_and_refresh_token())
         return await self._hass.async_add_executor_job(
-            partial(build, "drive", "v3", credentials=credentials)
+            partial(
+                build,
+                "drive",
+                "v3",
+                credentials=credentials,
+                cache=MemoryCache(maxsize=50),
+            )
         )

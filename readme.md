@@ -71,11 +71,6 @@ NOTE: You must copy and save your Client ID and Client Secret in a safe and secu
 
 If you have any issues with backups in general, report to the Home Assistant core repository, this integration only handles downloading and uploading files to Google Drive, nothing more, nothing less. Unrelated issues will be closed.
 
-## Known issues
-
-- Log can be spammed with `[googleapiclient.discovery_cache] file_cache is only supported with oauth2client<4.0.0`
-- Currently can appear slow to respond, this is purely cosmetic, please don't spam the backup button or download buttons.
-
 ## Contributions are welcome!
 
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)

@@ -1,5 +1,6 @@
 """Backup platform for Google Drive."""
 
+import asyncio
 import io
 import json
 from collections.abc import AsyncIterator, Callable, Coroutine
@@ -45,27 +46,6 @@ async def get_all_bytes(iterator: AsyncIterator[bytes]) -> bytes:
     return bytes(all_bytes)
 
 
-async def bytes_to_async_iterator(
-    data: bytes, chunk_size: int = 4096
-) -> AsyncIterator[bytes]:
-    """
-    Convert a bytes object into an AsyncIterator[bytes] by yielding chunks of data.
-
-    Args:
-      data: The bytes object to convert.
-      chunk_size: The desired size of each chunk in bytes.
-
-    Yields:
-      Chunks of the input data as bytes objects.
-
-    """
-    start = 0
-    while start < len(data):
-        end = min(start + chunk_size, len(data))
-        yield data[start:end]
-        start = end
-
-
 def remove_list_item_by_value(data: list, key: str, value: str) -> list:
     """Remove a given item from a list, filtered by key value."""
     for i, d in enumerate(data):
@@ -87,9 +67,8 @@ class DriveBackupAgent(BackupAgent):
         self._gdrive = gdrive
         self._hass = hass
 
-    async def retrieve_file_content(self, file_id: str) -> bytes:
+    async def retrieve_file_content(self, file_id: str, service) -> bytes:
         """Get file content from Google Drive."""
-        service = await self._gdrive.get_resource()
         query = service.files().get_media(fileId=file_id)  # type: ignore
         stream = io.BytesIO()
         downloader = MediaIoBaseDownload(stream, query)
@@ -100,17 +79,20 @@ class DriveBackupAgent(BackupAgent):
             )
         return stream.getvalue()
 
-    async def create_or_update_config(self, data: list[dict] | None = None) -> None:
+    async def create_or_update_config(
+        self, service, data: list[dict] | None = None
+    ) -> None:
         """Create or update backups.json file that contains AgentBackup data."""
         if data is None:
             data = []
         await self.create_file(
-            file_name="backups.json", stream=json.dumps(data).encode("utf-8")
+            file_name="backups.json",
+            stream=json.dumps(data).encode("utf-8"),
+            service=service,
         )
 
-    async def load_config(self) -> list[dict]:
+    async def load_config(self, service) -> list[dict]:
         """Retrieve backups.json from Google Drive."""
-        service = await self._gdrive.get_resource()
         query = service.files().list(  # type: ignore
             spaces="appDataFolder",
             fields="files(id)",
@@ -118,33 +100,32 @@ class DriveBackupAgent(BackupAgent):
         )
         data = await self._hass.async_add_executor_job(query.execute)
         if len(data.get("files", [])) == 0:
-            await self.create_or_update_config()
+            await self.create_or_update_config(service=service)
             return []
 
         # download the file
-        data = await self.retrieve_file_content(data["files"][0]["id"])
+        data = await self.retrieve_file_content(data["files"][0]["id"], service)
         self._running_config = json.loads(data.decode("utf-8"))
         return self._running_config
 
-    async def get_files(self) -> list[AgentBackup]:
+    async def get_files(self, service) -> list[AgentBackup]:
         """Get all files."""
-        data = await self.load_config()
+        data = await self.load_config(service)
         files = []
         for file in data:
             files.append(AgentBackup.from_dict(file))  # noqa: PERF401
         return files
 
-    async def get_file(self, backup_id: str) -> AgentBackup | None:
+    async def get_file(self, backup_id: str, service) -> AgentBackup | None:
         """Get a file from Google Drive."""
-        data = await self.get_files()
+        data = await self.get_files(service)
         for file in data:
             if file.backup_id == backup_id:
                 return file
         return None
 
-    async def get_google_drive_file_id(self, backup_id: str) -> str | None:
+    async def get_google_drive_file_id(self, backup_id: str, service) -> str | None:
         """Retrun the Google Drive file id."""
-        service = await self._gdrive.get_resource()
         query = service.files().list(  # type: ignore
             spaces="appDataFolder",
             fields="files(id)",
@@ -155,17 +136,16 @@ class DriveBackupAgent(BackupAgent):
             return None
         return data["files"][0]["id"]
 
-    async def download_backup(self, backup_id: str) -> bytes | None:
+    async def download_backup(self, backup_id: str, service) -> bytes | None:
         """Get a backup from file storage (returns tar file)."""
-        file_id = await self.get_google_drive_file_id(backup_id)
+        file_id = await self.get_google_drive_file_id(backup_id, service)
         # download the file
-        return await self.retrieve_file_content(file_id)
+        return await self.retrieve_file_content(file_id, service)
 
     async def create_file(
-        self, file_name: str, stream: AsyncIterator[bytes] | bytes
+        self, file_name: str, stream: AsyncIterator[bytes] | bytes, service
     ) -> str:
         """Create a file in Google Drive."""
-        service = await self._gdrive.get_resource()
         file_metadata = {
             "name": file_name,
             "parents": ["appDataFolder"],
@@ -195,21 +175,20 @@ class DriveBackupAgent(BackupAgent):
         return response.get("id")
 
     async def create_backup(
-        self, stream: AsyncIterator[bytes] | bytes, backup: AgentBackup
+        self, stream: AsyncIterator[bytes] | bytes, backup: AgentBackup, service
     ) -> None:
         """Create a backup."""
         # first upload
-        file_id = await self.create_file(f"{backup.backup_id}.tar", stream)
+        file_id = await self.create_file(f"{backup.backup_id}.tar", stream, service)
         if not file_id:
             raise BackupAgentError("Unknown Google Drive Error")  # noqa: EM101, TRY003
         # now update backups.json
-        conf = await self.load_config()
+        conf = await self.load_config(service)
         conf.append(backup.as_dict())
-        await self.create_or_update_config(conf)
+        await self.create_or_update_config(service, conf)
 
-    async def delete_file(self, file_id: str) -> None:
+    async def delete_file(self, file_id: str, service) -> None:
         """Delete a given file."""
-        service = await self._gdrive.get_resource()
         await self._hass.async_add_executor_job(
             service.files().delete(fileId=file_id).execute  # type: ignore  # noqa: PGH003
         )
@@ -220,12 +199,16 @@ class DriveBackupAgent(BackupAgent):
         **kwargs: Any,  # noqa: ARG002
     ) -> AsyncIterator[bytes]:
         """Download an existing backup."""
-        details = await self.get_file(backup_id)
+        service = await self._gdrive.get_resource()
+        details = await self.get_file(backup_id, service)
         if not details:
             raise BackupAgentError("Backup not found")  # noqa: EM101, TRY003
-        data = await self.download_backup(backup_id)
+        data = await self.download_backup(backup_id, service)
         if data is not None:
-            return bytes_to_async_iterator(data)
+            reader = asyncio.StreamReader()
+            reader.feed_data(data)
+            reader.feed_eof()
+            return reader
         raise BackupAgentError("Backup not found")  # noqa: EM101, TRY003
 
     async def async_upload_backup(
@@ -235,25 +218,29 @@ class DriveBackupAgent(BackupAgent):
         backup: AgentBackup,
         **kwargs: Any,  # noqa: ARG002
     ) -> None:
+        service = await self._gdrive.get_resource()
         """Upload a new backup."""
-        return await self.create_backup(await open_stream(), backup)
+        return await self.create_backup(await open_stream(), backup, service)
 
     async def async_delete_backup(self, backup_id: str, **kwargs: Any) -> None:  # noqa: ARG002
         """Delete a given backup."""
-        details = await self.get_file(backup_id)
+        service = await self._gdrive.get_resource()
+        details = await self.get_file(backup_id, service)
         if not details:
             raise BackupAgentError("Backup not found")  # noqa: EM101, TRY003
-        file_id = await self.get_google_drive_file_id(details.backup_id)
+        file_id = await self.get_google_drive_file_id(details.backup_id, service)
         await self.create_or_update_config(
-            remove_list_item_by_value(self._running_config, "backup_id", backup_id)
+            service,
+            remove_list_item_by_value(self._running_config, "backup_id", backup_id),
         )
         if not file_id:
             raise BackupAgentError("Backup not found")  # noqa: EM101, TRY003
-        await self.delete_file(file_id)
+        await self.delete_file(file_id, service)
 
     async def async_list_backups(self, **kwargs: Any) -> list[AgentBackup]:  # noqa: ARG002
         """List all backups."""
-        return await self.get_files()
+        service = await self._gdrive.get_resource()
+        return await self.get_files(service)
 
     async def async_get_backup(
         self,
@@ -261,4 +248,5 @@ class DriveBackupAgent(BackupAgent):
         **kwargs: Any,  # noqa: ARG002
     ) -> AgentBackup | None:
         """Return a given backup."""
-        return await self.get_file(backup_id)
+        service = await self._gdrive.get_resource()
+        return await self.get_file(backup_id, service)
