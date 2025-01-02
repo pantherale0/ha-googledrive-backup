@@ -2,7 +2,7 @@
   "domain": "google_drive",
   "name": "Google Drive",
   "codeowners": [
-    "@ludeeus"
+    "@pantherale0"
   ],
   "config_flow": true,
   "dependencies": [
