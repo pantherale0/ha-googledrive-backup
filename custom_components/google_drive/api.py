@@ -49,7 +49,7 @@ class AsyncConfigEntryAuth:
                     ) from ex
                 raise ConfigEntryNotReady from ex
             if isinstance(ex, RefreshError) or (
-                hasattr(ex, "status") and ex.status == 400  # noqa: PGH003, PLR2004
+                hasattr(ex, "status") and ex.status == 400  # noqa: PLR2004
             ):
                 self.oauth_session.config_entry.async_start_reauth(
                     self.oauth_session.hass
